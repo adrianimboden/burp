@@ -163,7 +163,9 @@ static int do_protocol2_dirs(struct sdirs *sdirs, struct conf **confs)
 	  || !(sdirs->champsock=prepend_s(sdirs->data, "cc.sock"))
 	  || !(sdirs->champlog=prepend_s(sdirs->data, "cc.log"))
 	  || !(sdirs->manifest=prepend_s(sdirs->working, "manifest"))
-	  || !(sdirs->cmanifest=prepend_s(sdirs->current, "manifest")))
+	  || !(sdirs->cmanifest=prepend_s(sdirs->current, "manifest"))
+	  || !(sdirs->new_data_files=prepend_s(sdirs->working,
+			"new_data_files")))
 		return -1;
 	// sdirs->rworking gets set later.
 	// sdirs->rmanifest gets set later.
@@ -223,6 +225,7 @@ void sdirs_free_content(struct sdirs *sdirs)
 	free_w(&sdirs->rmanifest);
         free_w(&sdirs->cmanifest);
 	free_w(&sdirs->phase1data);
+	free_w(&sdirs->new_data_files);
 
 	free_w(&sdirs->lockdir);
 	lock_free(&sdirs->lock);

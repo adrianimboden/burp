@@ -581,10 +581,10 @@ man_off_t *manio_tell(struct manio *manio)
 {
 	static man_off_t offset;
 	memset(&offset, 0, sizeof(man_off_t));
-	if(!manio->fzp) return 0;
+	man_off_t_memcpy(&offset, &manio->offset);
+	if(!manio->fzp) return &offset;
 	if((manio->offset.offset=fzp_tell(manio->fzp))<0)
 		return NULL;
-	man_off_t_memcpy(&offset, &manio->offset);
 	return &offset;
 }
 
@@ -597,20 +597,22 @@ int manio_seek(struct manio *manio, man_off_t *offset)
 	return fzp_seek(manio->fzp, manio->offset.offset, SEEK_SET);
 }
 
-int manio_truncate(struct manio *manio)
+int manio_truncate(struct manio *manio, struct conf **confs)
 {
-	off_t pos=0;
-	if(manio->fzp && (pos=fzp_tell(manio->fzp))<0)
+	man_off_t *offset=NULL;
+	if(!(offset=manio_tell(manio)))
 	{
-		logp("Could not fzp_tell %s in %s(): %s\n",
+		logp("Could not manio_tell %s in %s(): %s\n",
 			manio->directory, __func__, strerror(errno));
 		return -1;
 	}
-	if(truncate(manio->directory, pos))
+	if(fzp_truncate(manio->fzp, offset->fpath, offset->offset, confs))
 	{
-		logp("Could not truncate %s in %s(): %s\n",
-			manio->directory, __func__, strerror(errno));
+		logp("Could not truncate %s to %d in %s(): %s\n",
+			offset->fpath, offset->offset,
+			__func__, strerror(errno));
 		return -1;
 	}
+	logp("truncated %s at %d\n", offset->fpath, offset->offset);
 	return 0;
 }

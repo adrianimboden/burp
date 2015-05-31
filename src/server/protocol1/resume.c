@@ -56,6 +56,7 @@ static int do_forward(struct manio *manio, struct iobuf *result,
 		// entry, we need to remember the position of it.
 		if(target && seekback)
 		{
+logp("HERE %s\n", manio->directory);
 			if(!manio_closed(manio)
 			  && !(pos=manio_tell(manio)))
 			{
@@ -63,6 +64,7 @@ static int do_forward(struct manio *manio, struct iobuf *result,
 					__func__, strerror(errno));
 				goto error;
 			}
+if(manio->fzp) logp("HERE2 %d\n", fzp_tell(manio->fzp));
 		}
 
 		sbuf_free_content(sb);
@@ -110,7 +112,7 @@ static int do_forward(struct manio *manio, struct iobuf *result,
 			{
 				errno=0;
 				if(!manio_closed(manio)
-				  && manio_seek(manio, pos))
+				  && manio_seek(manio, pos)<0)
 				{
 					logp("Could not seek to %s:%d in %s():"
 						" %s\n", pos->fpath,
@@ -151,16 +153,18 @@ error:
 }
 
 static int do_resume_work(struct manio *p1manio,
-	struct manio *cmanio, struct manio *umanio,
+	struct manio *cmanio, struct manio *c2manio, struct manio *umanio,
 	struct dpth *dpth, struct conf **cconfs)
 {
 	int ret=0;
 	struct iobuf *p1b=NULL;
 	struct iobuf *chb=NULL;
 	struct iobuf *ucb=NULL;
+	struct iobuf *chb2=NULL;
 
 	if(!(p1b=iobuf_alloc())
 	  || !(chb=iobuf_alloc())
+	  || !(chb2=iobuf_alloc())
 	  || !(ucb=iobuf_alloc()))
 		return -1;
 
@@ -181,6 +185,13 @@ static int do_resume_work(struct manio *p1manio,
 	if(chb->buf)
 	{
 		logp("  changed:    %s\n", chb->buf);
+		if(do_forward(c2manio, chb2, chb,
+			0, /* not phase1 */
+			1, /* seekback */
+			1, /* do cntr */
+			0, /* changed */
+			dpth, cconfs)) goto error;
+		logp("  changed2:    %s\n", chb2->buf);
 		// Now need to go to the appropriate places in p1manio and
 		// unchanged.
 		if(do_forward(p1manio, p1b, chb,
@@ -221,6 +232,7 @@ error:
 end:
 	iobuf_free(&p1b);
 	iobuf_free(&chb);
+	iobuf_free(&chb2);
 	iobuf_free(&ucb);
 	logp("End phase1 (read previous file system scan)\n");
 	return ret;
@@ -233,6 +245,7 @@ int do_resume(struct manio *p1manio, struct sdirs *sdirs,
 	struct fzp *cfzp=NULL;
 	struct fzp *ufzp=NULL;
 	struct manio *cmanio=NULL;
+	struct manio *c2manio=NULL;
 	struct manio *umanio=NULL;
 
 	if(get_e_protocol(cconfs[OPT_PROTOCOL])==PROTO_1)
@@ -248,24 +261,27 @@ int do_resume(struct manio *p1manio, struct sdirs *sdirs,
 	}
 
 	if(!(cmanio=manio_alloc())
+	  || !(c2manio=manio_alloc())
 	  || !(umanio=manio_alloc())
 	  || manio_init_read(cmanio, sdirs->changed)
+	  || manio_init_read(c2manio, sdirs->changed)
 	  || manio_init_read(umanio, sdirs->unchanged))
 		goto end;
 //	manio_set_protocol(cmanio, PROTO_1);
 //	manio_set_protocol(umanio, PROTO_1);
 
-	if(do_resume_work(p1manio, cmanio, umanio, dpth, cconfs)) goto end;
+	if(do_resume_work(p1manio, cmanio, c2manio, umanio, dpth, cconfs)) goto end;
 
 	// Truncate to the appropriate places.
-	if(manio_truncate(cmanio)
-	  || manio_truncate(umanio))
+	if(manio_truncate(c2manio, cconfs)
+	  || manio_truncate(umanio, cconfs))
 		goto end;
 	ret=0;
 end:
 	fzp_close(&cfzp);
 	fzp_close(&ufzp);
 	manio_free(&cmanio);
+	manio_free(&c2manio);
 	manio_free(&umanio);
 	return ret;
 }

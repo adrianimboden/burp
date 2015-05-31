@@ -10,7 +10,7 @@ extern int dpth_protocol2_incr_sig(struct dpth *dpth);
 extern char *dpth_protocol2_mk(struct dpth *dpth);
 extern char *dpth_protocol2_get_save_path(struct dpth *dpth);
 
-extern int dpth_protocol2_fwrite(struct dpth *dpth,
+extern int dpth_protocol2_fwrite(struct dpth *dpth, FILE *new_data_fp,
 	struct iobuf *iobuf, struct blk *blk);
 
 #endif

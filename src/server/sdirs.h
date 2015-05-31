@@ -30,6 +30,7 @@ struct sdirs
 	char *rmanifest; // Path to manifest (real).
 	char *cmanifest; // Path to current (previous) manifest.
 	char *phase1data;
+	char *new_data_files;
 
 	char *lockdir;
 	struct lock *lock;

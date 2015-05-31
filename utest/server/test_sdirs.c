@@ -140,6 +140,7 @@ static void protocol2_tests(struct sdirs *sdirs, struct conf **confs)
 	ck_assert_str_eq(sdirs->manifest, WORKING2 "/manifest");
 	ck_assert_str_eq(sdirs->cmanifest, CURRENT2 "/manifest");
 	ck_assert_str_eq(sdirs->phase1data, WORKING2 "/phase1.gz");
+	ck_assert_str_eq(sdirs->new_data_files, WORKING2 "/new_data_files");
 	ck_assert_str_eq(sdirs->lockdir, CLIENT2);
 	ck_assert_str_eq(sdirs->lock->path, CLIENT2 "/lockfile");
 	fail_unless(sdirs->currentdata==NULL);

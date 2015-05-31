@@ -234,13 +234,13 @@ static FILE *file_open_w(const char *path, const char *mode)
 	return fp;
 }
 
-static FILE *open_data_file_for_write(struct dpth *dpth, struct blk *blk)
+static FILE *open_data_file_for_write(struct dpth *dpth, struct blk *blk,
+	FILE *new_data_fp)
 {
 	FILE *fp=NULL;
 	char *path=NULL;
 	char *savepathstr=NULL;
 	struct dpth_lock *head=dpth->head;
-//printf("moving for: %s\n", blk->save_path);
 
 	savepathstr=bytes_to_savepathstr(blk->savepath);
 
@@ -260,13 +260,32 @@ static FILE *open_data_file_for_write(struct dpth *dpth, struct blk *blk)
 
 	if(!(path=prepend_slash(dpth->base_path, savepathstr, 14)))
 		goto end;
-	fp=file_open_w(path, "wb");
+	if(!(fp=file_open_w(path, "wb")))
+		goto end;
+
+	// Make a note of new data files that this backup has created. This
+	// is useful if the backup is interrupted and we later need to clean
+	// up.
+	fprintf(new_data_fp, "%s\n", savepathstr);
+	if(fflush(new_data_fp))
+	{
+		logp("fflush failed on new_data_fp: %s\n", strerror(errno));
+		close_fp(&fp);
+		goto end;
+	}
+	// Try to make sure it gets to disk.
+	if(fsync(fileno(new_data_fp)))
+	{
+		logp("fsync failed on new_data_fp: %s\n", strerror(errno));
+		close_fp(&fp);
+		goto end;
+	}
 end:
 	free_w(&path);
 	return fp;
 }
 
-int dpth_protocol2_fwrite(struct dpth *dpth,
+int dpth_protocol2_fwrite(struct dpth *dpth, FILE *new_data_fp,
 	struct iobuf *iobuf, struct blk *blk)
 {
 	//printf("want to write: %s\n", blk->save_path);
@@ -282,7 +301,8 @@ int dpth_protocol2_fwrite(struct dpth *dpth,
 
 	// Open the current list head if we have no fp.
 	if(!dpth->fp
-	  && !(dpth->fp=open_data_file_for_write(dpth, blk))) return -1;
+	  && !(dpth->fp=open_data_file_for_write(dpth, blk, new_data_fp)))
+		return -1;
 
 	return fwrite_buf(CMD_DATA, iobuf->buf, iobuf->len, dpth->fp);
 }

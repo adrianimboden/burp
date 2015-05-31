@@ -150,6 +150,8 @@ int sbuf_fill(struct sbuf *sb, struct asfd *asfd, struct fzp *fzp,
 	static struct iobuf *localrbuf=NULL;
 	int ret=-1;
 
+if(fzp) logp("tell %d\n", fzp_tell(fzp));
+
 	if(asfd) rbuf=asfd->rbuf;
 	else
 	{

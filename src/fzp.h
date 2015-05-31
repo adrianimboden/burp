@@ -33,4 +33,7 @@ extern off_t fzp_tell(struct fzp *fzp);
 
 extern int fzp_printf(struct fzp *fzp, const char *format, ...);
 
+extern int fzp_truncate(struct fzp *fzp, const char *path, off_t length,
+	struct conf **confs);
+
 #endif

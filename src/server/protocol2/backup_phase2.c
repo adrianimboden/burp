@@ -126,7 +126,7 @@ static int entry_changed(struct asfd *asfd, struct sbuf *sb,
 	return 0;
 }
 
-static int add_data_to_store(struct conf **confs,
+static int add_data_to_store(struct conf **confs, FILE *new_data_fp,
 	struct blist *blist, struct iobuf *rbuf, struct dpth *dpth)
 {
 	static struct blk *blk=NULL;
@@ -148,7 +148,7 @@ static int add_data_to_store(struct conf **confs,
 	}
 
 	// Add it to the data store straight away.
-	if(dpth_protocol2_fwrite(dpth, rbuf, blk)) return -1;
+	if(dpth_protocol2_fwrite(dpth, new_data_fp, rbuf, blk)) return -1;
 
 	cntr_add(get_cntr(confs[OPT_CNTR]), CMD_DATA, 0);
 	cntr_add_recvbytes(get_cntr(confs[OPT_CNTR]), blk->length);
@@ -221,7 +221,7 @@ static int add_to_sig_list(struct slist *slist, struct blist *blist,
 	return 0;
 }
 
-static int deal_with_read(struct iobuf *rbuf,
+static int deal_with_read(struct iobuf *rbuf, FILE *new_data_fp,
 	struct slist *slist, struct blist *blist, struct conf **confs,
 	int *sigs_end, int *backup_end, struct dpth *dpth)
 {
@@ -234,8 +234,8 @@ static int deal_with_read(struct iobuf *rbuf,
 	{
 		/* Incoming block data. */
 		case CMD_DATA:
-			if(add_data_to_store(confs, blist, rbuf, dpth))
-				goto error;
+			if(add_data_to_store(confs, new_data_fp,
+				blist, rbuf, dpth)) goto error;
 			goto end;
 
 		/* Incoming block signatures. */
@@ -752,6 +752,7 @@ int backup_phase2_server_protocol2(struct async *as, struct sdirs *sdirs,
 	uint64_t wrap_up=0;
 	struct asfd *asfd=as->asfd;
 	struct asfd *chfd;
+	FILE *new_data_fp=NULL;
 	chfd=get_asfd_from_list_by_fdtype(as, ASFD_FD_SERVER_TO_CHAMP_CHOOSER);
 
 	logp("Phase 2 begin (recv backup data)\n");
@@ -769,6 +770,7 @@ int backup_phase2_server_protocol2(struct async *as, struct sdirs *sdirs,
 	  || !(blist=blist_alloc())
 	  || !(wbuf=iobuf_alloc())
 	  || !(dpth=dpth_alloc())
+	  || !(new_data_fp=open_file(sdirs->new_data_files, "wb"))
 	  || dpth_protocol2_init(dpth,
 		sdirs->data, get_int(confs[OPT_MAX_STORAGE_SUBDIRS])))
 			goto end;
@@ -815,8 +817,8 @@ int backup_phase2_server_protocol2(struct async *as, struct sdirs *sdirs,
 
 		while(asfd->rbuf->buf)
 		{
-			if(deal_with_read(asfd->rbuf, slist, blist,
-				confs, &sigs_end, &backup_end, dpth))
+			if(deal_with_read(asfd->rbuf, new_data_fp, slist,
+				blist, confs, &sigs_end, &backup_end, dpth))
 					goto end;
 			// Get as much out of the
 			// readbuf as possible.
@@ -884,5 +886,6 @@ end:
 	manio_free(&p1manio);
 	manio_free(&chmanio);
 	manio_free(&unmanio);
+	close_fp(&new_data_fp);
 	return ret;
 }

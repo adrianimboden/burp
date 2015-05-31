@@ -3,6 +3,9 @@
 #include "fsops.h"
 #include "fzp.h"
 #include "log.h"
+#include "prepend.h"
+#include "server/compress.h"
+#include "server/protocol1/zlibio.h"
 
 static struct fzp *fzp_alloc(void)
 {
@@ -182,4 +185,48 @@ int fzp_printf(struct fzp *fzp, const char *format, ...)
 	}
 	va_end(ap);
 	return ret;
+}
+
+// There is no zlib gztruncate. Inflate it, truncate it, recompress it.
+static int gztruncate(const char *path, off_t length, struct conf **confs)
+{
+	int ret=1;
+	char tmp[16];
+	char *dest=NULL;
+	char *dest2=NULL;
+	snprintf(tmp, sizeof(tmp), ".%d", getpid());
+	if(!(dest=prepend(path, tmp))
+	  || !(dest2=prepend(dest, "-2"))
+	  || zlib_inflate(NULL, path, dest, NULL))
+		goto end;
+	if(truncate(dest, length))
+	{
+		logp("truncate of %s failed in %s\n", dest, __func__);
+		goto end;
+	}
+	if(compress_file(dest, dest2, confs))
+		goto end;
+	unlink(dest);
+	ret=do_rename(dest2, path);
+end:
+	if(dest) unlink(dest);
+	if(dest2) unlink(dest2);
+	free_w(&dest);
+	free_w(&dest2);
+	return ret;
+}
+
+int fzp_truncate(struct fzp *fzp, const char *path, off_t length,
+	struct conf **confs)
+{
+	switch(fzp->type)
+	{
+		case FZP_FILE:
+			return truncate(path, length);
+		case FZP_COMPRESSED:
+			return gztruncate(path, length, confs);
+		default:
+			unknown_type(fzp, __func__);
+			return -1;
+	}
 }
